@@ -3,6 +3,7 @@ package manage
 import (
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/oauth2.v3"
 	"gopkg.in/oauth2.v3/errors"
 	"gopkg.in/oauth2.v3/generates"
@@ -236,11 +237,16 @@ func (m *Manager) getAndDelAuthorizationCode(tgr *oauth2.TokenGenerateRequest) (
 	code := tgr.Code
 	ti, err := m.getAuthorizationCode(code)
 	if err != nil {
+		logrus.Errorf("get authorization code: %v", err)
 		return nil, err
 	} else if ti.GetClientID() != tgr.ClientID {
+		logrus.Errorf("ti client id: %s; tgr client id: %s; wrong client id", ti.GetClientID(), tgr.ClientID)
 		return nil, errors.ErrInvalidAuthorizeCode
-	} else if codeURI := ti.GetRedirectURI(); codeURI != "" && codeURI != tgr.RedirectURI {
-		return nil, errors.ErrInvalidAuthorizeCode
+	} else if codeURI := ti.GetRedirectURI(); codeURI != "" {
+		if err := m.validateURI(codeURI, tgr.RedirectURI); err != nil {
+			logrus.Errorf("code uri: %s; tgr redirect uri: %s; wrong redirect uri.", codeURI, tgr.RedirectURI)
+			return nil, errors.ErrInvalidAuthorizeCode
+		}
 	}
 
 	err = m.delAuthorizationCode(code)
@@ -266,6 +272,7 @@ func (m *Manager) GenerateAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGene
 	if gt == oauth2.AuthorizationCode {
 		ti, err := m.getAndDelAuthorizationCode(tgr)
 		if err != nil {
+			logrus.Errorf("get and del authorization code: %v", err)
 			return nil, err
 		}
 		tgr.UserID = ti.GetUserID()
@@ -306,6 +313,7 @@ func (m *Manager) GenerateAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGene
 
 	av, rv, err := m.accessGenerate.Token(td, gcfg.IsGenerateRefresh)
 	if err != nil {
+		logrus.Errorf("access generate token: %v", err)
 		return nil, err
 	}
 	ti.SetAccess(av)
@@ -316,6 +324,7 @@ func (m *Manager) GenerateAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGene
 
 	err = m.tokenStore.Create(ti)
 	if err != nil {
+		logrus.Errorf("token store create: %v", err)
 		return nil, err
 	}
 
