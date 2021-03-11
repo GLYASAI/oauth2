@@ -17,6 +17,7 @@ require (
 	github.com/moul/http2curl v1.0.0 // indirect
 	github.com/onsi/ginkgo v1.10.2 // indirect
 	github.com/onsi/gomega v1.7.0 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.5.0
 	github.com/smartystreets/goconvey v1.6.4

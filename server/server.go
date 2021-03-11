@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	perrors "github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/oauth2.v3"
 	"gopkg.in/oauth2.v3/errors"
 )
@@ -268,17 +270,17 @@ func (s *Server) HandleAuthorizeRequest(w http.ResponseWriter, r *http.Request) 
 func (s *Server) ValidationTokenRequest(r *http.Request) (oauth2.GrantType, *oauth2.TokenGenerateRequest, error) {
 	if v := r.Method; !(v == "POST" ||
 		(s.Config.AllowGetAccessRequest && v == "GET")) {
-		return "", nil, errors.ErrInvalidRequest
+		return "", nil, perrors.Wrap(errors.ErrInvalidRequest, "invalid request method")
 	}
 
 	gt := oauth2.GrantType(r.FormValue("grant_type"))
 	if gt.String() == "" {
-		return "", nil, errors.ErrUnsupportedGrantType
+		return "", nil, perrors.Wrap(errors.ErrUnsupportedGrantType, "no grant type")
 	}
 
 	clientID, clientSecret, err := s.ClientInfoHandler(r)
 	if err != nil {
-		return "", nil, err
+		return "", nil, perrors.WithStack(err)
 	}
 
 	tgr := &oauth2.TokenGenerateRequest{
@@ -293,7 +295,7 @@ func (s *Server) ValidationTokenRequest(r *http.Request) (oauth2.GrantType, *oau
 		tgr.Code = r.FormValue("code")
 		if tgr.RedirectURI == "" ||
 			tgr.Code == "" {
-			return "", nil, errors.ErrInvalidRequest
+			return "", nil, perrors.Wrap(errors.ErrInvalidRequest, "missing redirect_uri or code")
 		}
 	case oauth2.PasswordCredentials:
 		tgr.Scope = r.FormValue("scope")
@@ -334,15 +336,15 @@ func (s *Server) CheckGrantType(gt oauth2.GrantType) bool {
 // GetAccessToken access token
 func (s *Server) GetAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGenerateRequest) (oauth2.TokenInfo, error) {
 	if allowed := s.CheckGrantType(gt); !allowed {
-		return nil, errors.ErrUnauthorizedClient
+		return nil, perrors.Wrapf(errors.ErrUnauthorizedClient, "check grant type %s", gt.String())
 	}
 
 	if fn := s.ClientAuthorizedHandler; fn != nil {
 		allowed, err := fn(tgr.ClientID, gt)
 		if err != nil {
-			return nil, err
+			return nil, perrors.Wrap(err, "client authorized")
 		} else if !allowed {
-			return nil, errors.ErrUnauthorizedClient
+			return nil, perrors.WithStack(errors.ErrUnauthorizedClient)
 		}
 	}
 
@@ -352,11 +354,11 @@ func (s *Server) GetAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGenerateRe
 		if err != nil {
 			switch err {
 			case errors.ErrInvalidAuthorizeCode:
-				return nil, errors.ErrInvalidGrant
+				return nil, perrors.WithStack(errors.ErrInvalidGrant)
 			case errors.ErrInvalidClient:
-				return nil, errors.ErrInvalidClient
+				return nil, perrors.WithStack(errors.ErrInvalidClient)
 			default:
-				return nil, err
+				return nil, perrors.WithStack(err)
 			}
 		}
 		return ti, nil
@@ -434,12 +436,14 @@ func (s *Server) GetTokenData(ti oauth2.TokenInfo) map[string]interface{} {
 func (s *Server) HandleTokenRequest(w http.ResponseWriter, r *http.Request) error {
 	gt, tgr, err := s.ValidationTokenRequest(r)
 	if err != nil {
-		return s.tokenError(w, err)
+		logrus.Infof("validate the token request: %+v", err)
+		return s.tokenError(w, perrors.Cause(err))
 	}
 
 	ti, err := s.GetAccessToken(gt, tgr)
 	if err != nil {
-		return s.tokenError(w, err)
+		logrus.Infof("get access token: %+v", err)
+		return s.tokenError(w, perrors.Cause(err))
 	}
 
 	return s.token(w, s.GetTokenData(ti), nil)
