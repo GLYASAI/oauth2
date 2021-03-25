@@ -224,6 +224,11 @@ func (s *Server) HandleAuthorizeRequest(w http.ResponseWriter, r *http.Request) 
 	// user authorization
 	userID, err := s.UserAuthorizationHandler(w, r)
 	if err != nil {
+		if err.Error() == "no permission to the app" {
+			w.Header().Set("Location", "/ui/403?"+err.Error())
+			w.WriteHeader(http.StatusFound)
+			return nil
+		}
 		return s.redirectError(w, req, err)
 	} else if userID == "" {
 		return nil
