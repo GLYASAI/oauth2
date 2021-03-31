@@ -105,7 +105,10 @@ func (s *Server) GetRedirectURI(req *AuthorizeRequest, data map[string]interface
 		return "", err
 	}
 
-	q := make(url.Values)
+	q := u.Query()
+	if strings.Contains(req.RedirectURI, "#") {
+		q = make(url.Values)
+	}
 	if req.State != "" {
 		q.Set("state", req.State)
 	}
