@@ -105,7 +105,7 @@ func (s *Server) GetRedirectURI(req *AuthorizeRequest, data map[string]interface
 		return "", err
 	}
 
-	q := u.Query()
+	q := make(url.Values)
 	if req.State != "" {
 		q.Set("state", req.State)
 	}
@@ -117,6 +117,7 @@ func (s *Server) GetRedirectURI(req *AuthorizeRequest, data map[string]interface
 	switch req.ResponseType {
 	case oauth2.Code:
 		u.RawQuery = q.Encode()
+		return req.RedirectURI + "?" + q.Encode(), nil
 	case oauth2.Token:
 		u.RawQuery = ""
 		fragment, err := url.QueryUnescape(q.Encode())
