@@ -444,20 +444,20 @@ func (s *Server) GetTokenData(ti oauth2.TokenInfo) map[string]interface{} {
 }
 
 // HandleTokenRequest token request handling
-func (s *Server) HandleTokenRequest(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) HandleTokenRequest(w http.ResponseWriter, r *http.Request) (string, error) {
 	gt, tgr, err := s.ValidationTokenRequest(r)
 	if err != nil {
 		logrus.Infof("validate the token request: %+v", err)
-		return s.tokenError(w, perrors.Cause(err))
+		return "", s.tokenError(w, perrors.Cause(err))
 	}
 
 	ti, err := s.GetAccessToken(gt, tgr)
 	if err != nil {
 		logrus.Infof("get access token: %+v", err)
-		return s.tokenError(w, perrors.Cause(err))
+		return "", s.tokenError(w, perrors.Cause(err))
 	}
 
-	return s.token(w, s.GetTokenData(ti), nil)
+	return ti.GetAccess(), s.token(w, s.GetTokenData(ti), nil)
 }
 
 // GetErrorData get error response data
