@@ -69,6 +69,7 @@ func (s *Server) redirect(w http.ResponseWriter, req *AuthorizeRequest, data map
 	if err != nil {
 		return err
 	}
+	logrus.Infof("get redirect uri %s based on %s", uri, req.RedirectURI)
 
 	w.Header().Set("Location", uri)
 	w.WriteHeader(302)
@@ -100,6 +101,7 @@ func (s *Server) token(w http.ResponseWriter, data map[string]interface{}, heade
 
 // GetRedirectURI get redirect uri
 func (s *Server) GetRedirectURI(req *AuthorizeRequest, data map[string]interface{}) (string, error) {
+	logrus.Infof("About to parse redirect uri: %s", req.RedirectURI)
 	u, err := url.Parse(req.RedirectURI)
 	if err != nil {
 		return "", err
@@ -272,6 +274,7 @@ func (s *Server) HandleAuthorizeRequest(w http.ResponseWriter, r *http.Request) 
 			return err
 		}
 		req.RedirectURI = client.GetDomain()
+		logrus.Info("redirect uri not found, will use the default one: %s", req.RedirectURI)
 	}
 
 	return s.redirect(w, req, s.GetAuthorizeData(req.ResponseType, ti))
