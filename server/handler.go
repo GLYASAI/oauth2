@@ -41,6 +41,9 @@ type (
 
 	// ExtensionFieldsHandler in response to the access token with the extension of the field
 	ExtensionFieldsHandler func(ti oauth2.TokenInfo) (fieldsValue map[string]interface{})
+
+	// CheckUserPermHandler Check whether the user has the permission of built-in application
+	CheckUserPermHandler func(userID, clientID string) error
 )
 
 // ClientFormHandler get client data from form
