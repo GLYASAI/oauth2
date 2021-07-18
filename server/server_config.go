@@ -78,3 +78,8 @@ func (s *Server) SetAccessTokenExpHandler(handler AccessTokenExpHandler) {
 func (s *Server) SetAuthorizeScopeHandler(handler AuthorizeScopeHandler) {
 	s.AuthorizeScopeHandler = handler
 }
+
+// SetCheckUserPermHandler set check user perm handler
+func (s *Server) SetCheckUserPermHandler(handler CheckUserPermHandler) {
+	s.CheckUserPermHandler = handler
+}

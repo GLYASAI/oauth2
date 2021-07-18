@@ -54,6 +54,7 @@ type Server struct {
 	ExtensionFieldsHandler       ExtensionFieldsHandler
 	AccessTokenExpHandler        AccessTokenExpHandler
 	AuthorizeScopeHandler        AuthorizeScopeHandler
+	CheckUserPermHandler         CheckUserPermHandler
 }
 
 func (s *Server) redirectError(w http.ResponseWriter, req *AuthorizeRequest, err error) error {
@@ -324,6 +325,10 @@ func (s *Server) ValidationTokenRequest(r *http.Request) (oauth2.GrantType, *oau
 		} else if userID == "" {
 			return "", nil, errors.ErrInvalidGrant
 		}
+		err = s.CheckUserPermHandler(userID, r.FormValue("client_id"))
+		if err != nil {
+			return "", nil, err
+		}
 		tgr.UserID = userID
 	case oauth2.ClientCredentials:
 		tgr.Scope = r.FormValue("scope")
@@ -450,6 +455,9 @@ func (s *Server) GetTokenData(ti oauth2.TokenInfo) map[string]interface{} {
 func (s *Server) HandleTokenRequest(w http.ResponseWriter, r *http.Request) (string, error) {
 	gt, tgr, err := s.ValidationTokenRequest(r)
 	if err != nil {
+		if err.Error() == "no permission to the app" {
+			return "", err
+		}
 		logrus.Infof("validate the token request: %+v", err)
 		return "", s.tokenError(w, perrors.Cause(err))
 	}
