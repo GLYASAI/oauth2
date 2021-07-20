@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -75,29 +74,6 @@ func (s *Server) redirect(w http.ResponseWriter, req *AuthorizeRequest, data map
 	w.Header().Set("Location", uri)
 	w.WriteHeader(302)
 	return nil
-}
-
-func (s *Server) tokenError(w http.ResponseWriter, err error) error {
-	data, statusCode, header := s.GetErrorData(err)
-	return s.token(w, data, header, statusCode)
-}
-
-func (s *Server) token(w http.ResponseWriter, data map[string]interface{}, header http.Header, statusCode ...int) error {
-	w.Header().Set("Content-Type", "application/json;charset=UTF-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Pragma", "no-cache")
-
-	for key := range header {
-		w.Header().Set(key, header.Get(key))
-	}
-
-	status := http.StatusOK
-	if len(statusCode) > 0 && statusCode[0] > 0 {
-		status = statusCode[0]
-	}
-
-	w.WriteHeader(status)
-	return json.NewEncoder(w).Encode(data)
 }
 
 // GetRedirectURI get redirect uri
@@ -288,6 +264,14 @@ func (s *Server) ValidationTokenRequest(r *http.Request) (oauth2.GrantType, *oau
 		return "", nil, perrors.Wrap(errors.ErrInvalidRequest, "invalid request method")
 	}
 
+	contentType := r.Header["Content-Type"]
+	if len(contentType) == 0 {
+		return "", nil, perrors.Wrap(errors.ErrInvalidContentType, "content type not found")
+	}
+	if contentType[0] != "application/x-www-form-urlencoded" {
+		return "", nil, perrors.Wrapf(errors.ErrInvalidContentType, "unsupported content type: %v", contentType[0])
+	}
+
 	gt := oauth2.GrantType(r.FormValue("grant_type"))
 	if gt.String() == "" {
 		return "", nil, perrors.Wrap(errors.ErrUnsupportedGrantType, "no grant type")
@@ -371,14 +355,7 @@ func (s *Server) GetAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGenerateRe
 	case oauth2.AuthorizationCode:
 		ti, err := s.Manager.GenerateAccessToken(gt, tgr)
 		if err != nil {
-			switch err {
-			case errors.ErrInvalidAuthorizeCode:
-				return nil, perrors.WithStack(errors.ErrInvalidGrant)
-			case errors.ErrInvalidClient:
-				return nil, perrors.WithStack(errors.ErrInvalidClient)
-			default:
-				return nil, perrors.WithStack(err)
-			}
+			return nil, err
 		}
 		return ti, nil
 	case oauth2.PasswordCredentials, oauth2.ClientCredentials:
@@ -452,23 +429,18 @@ func (s *Server) GetTokenData(ti oauth2.TokenInfo) map[string]interface{} {
 }
 
 // HandleTokenRequest token request handling
-func (s *Server) HandleTokenRequest(w http.ResponseWriter, r *http.Request) (string, error) {
+func (s *Server) HandleTokenRequest(w http.ResponseWriter, r *http.Request) (map[string]interface{}, error) {
 	gt, tgr, err := s.ValidationTokenRequest(r)
 	if err != nil {
-		if err.Error() == "no permission to the app" {
-			return "", err
-		}
-		logrus.Infof("validate the token request: %+v", err)
-		return "", s.tokenError(w, perrors.Cause(err))
+		return nil, err
 	}
 
 	ti, err := s.GetAccessToken(gt, tgr)
 	if err != nil {
-		logrus.Infof("get access token: %+v", err)
-		return "", s.tokenError(w, perrors.Cause(err))
+		return nil, err
 	}
 
-	return ti.GetAccess(), s.token(w, s.GetTokenData(ti), nil)
+	return s.GetTokenData(ti), nil
 }
 
 // GetErrorData get error response data

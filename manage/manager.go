@@ -3,6 +3,7 @@ package manage
 import (
 	"time"
 
+	perr "github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/oauth2.v3"
 	"gopkg.in/oauth2.v3/errors"
@@ -219,10 +220,9 @@ func (m *Manager) GenerateAuthToken(rt oauth2.ResponseType, tgr *oauth2.TokenGen
 func (m *Manager) getAuthorizationCode(code string) (oauth2.TokenInfo, error) {
 	ti, err := m.tokenStore.GetByCode(code)
 	if err != nil {
-		return nil, err
+		return nil, perr.Wrap(err, "get code from token store")
 	} else if ti == nil || ti.GetCode() != code || ti.GetCodeCreateAt().Add(ti.GetCodeExpiresIn()).Before(time.Now()) {
-		err = errors.ErrInvalidAuthorizeCode
-		return nil, errors.ErrInvalidAuthorizeCode
+		return nil, perr.WithStack(errors.ErrInvalidAuthorizeCode)
 	}
 	return ti, nil
 }
@@ -237,21 +237,18 @@ func (m *Manager) getAndDelAuthorizationCode(tgr *oauth2.TokenGenerateRequest) (
 	code := tgr.Code
 	ti, err := m.getAuthorizationCode(code)
 	if err != nil {
-		logrus.Errorf("get authorization code: %v", err)
 		return nil, err
 	} else if ti.GetClientID() != tgr.ClientID {
-		logrus.Errorf("ti client id: %s; tgr client id: %s; wrong client id", ti.GetClientID(), tgr.ClientID)
-		return nil, errors.ErrInvalidAuthorizeCode
+		return nil, perr.WithStack(errors.ErrInvalidClientID)
 	} else if codeURI := ti.GetRedirectURI(); codeURI != "" {
 		if err := m.validateURI(codeURI, tgr.RedirectURI); err != nil {
-			logrus.Errorf("code uri: %s; tgr redirect uri: %s; wrong redirect uri.", codeURI, tgr.RedirectURI)
-			return nil, errors.ErrInvalidAuthorizeCode
+			return nil, perr.WithMessagef(errors.ErrInvalidRedirectURI, "code uri: %s; tgr redirect uri: %s.", codeURI, tgr.RedirectURI)
 		}
 	}
 
 	err = m.delAuthorizationCode(code)
 	if err != nil {
-		return nil, err
+		return nil, perr.Wrap(err, "delete authorization code")
 	}
 	return ti, nil
 }
@@ -262,7 +259,7 @@ func (m *Manager) GenerateAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGene
 	if err != nil {
 		return nil, err
 	} else if tgr.ClientSecret != cli.GetSecret() {
-		return nil, errors.ErrInvalidClient
+		return nil, perr.WithStack(errors.ErrInvalidClientSecret)
 	} else if tgr.RedirectURI != "" {
 		if err := m.validateURI(cli.GetDomain(), tgr.RedirectURI); err != nil {
 			return nil, err
@@ -272,7 +269,6 @@ func (m *Manager) GenerateAccessToken(gt oauth2.GrantType, tgr *oauth2.TokenGene
 	if gt == oauth2.AuthorizationCode {
 		ti, err := m.getAndDelAuthorizationCode(tgr)
 		if err != nil {
-			logrus.Errorf("get and del authorization code: %v", err)
 			return nil, err
 		}
 		tgr.UserID = ti.GetUserID()
