@@ -446,23 +446,8 @@ func (s *Server) HandleTokenRequest(w http.ResponseWriter, r *http.Request) (map
 // GetErrorData get error response data
 func (s *Server) GetErrorData(err error) (map[string]interface{}, int, http.Header) {
 	var re errors.Response
-	if v, ok := errors.Descriptions[err]; ok {
-		re.Error = err
-		re.Description = v
-		re.StatusCode = errors.StatusCodes[err]
-	} else {
-		if fn := s.InternalErrorHandler; fn != nil {
-			if v := fn(err); v != nil {
-				re = *v
-			}
-		}
-
-		if re.Error == nil {
-			re.Error = errors.ErrServerError
-			re.Description = errors.Descriptions[errors.ErrServerError]
-			re.StatusCode = errors.StatusCodes[errors.ErrServerError]
-		}
-	}
+	re.Error = err
+	re.StatusCode = 400
 
 	if fn := s.ResponseErrorHandler; fn != nil {
 		fn(&re)
@@ -475,10 +460,6 @@ func (s *Server) GetErrorData(err error) (map[string]interface{}, int, http.Head
 
 	if v := re.ErrorCode; v != 0 {
 		data["error_code"] = v
-	}
-
-	if v := re.Description; v != "" {
-		data["error_description"] = v
 	}
 
 	if v := re.URI; v != "" {
